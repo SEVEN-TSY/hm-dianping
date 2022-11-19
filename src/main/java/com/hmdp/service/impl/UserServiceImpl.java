@@ -11,12 +11,18 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
+import java.sql.Time;
+import java.util.HashMap;
 import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
+import static com.hmdp.utils.RedisConstants.*;
 import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 
 /**
@@ -34,6 +40,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Resource
     private UserMapper userMapper;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
     @Override
     public Result sendCode(String phone, HttpSession session) {
         if(RegexUtils.isPhoneInvalid(phone)){
@@ -42,10 +51,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         String numbers = RandomUtil.randomNumbers(6);
         log.info("pass code : {}",numbers);
-        session.setAttribute("code",numbers);
+        //保存到Redis
+        stringRedisTemplate.opsForValue().set(LOGIN_CODE_KEY+phone,numbers,LOGIN_CODE_TTL, TimeUnit.MINUTES);
         //模拟实际发送验证码
         log.info("sendCode success");
-
 
         return Result.ok();
 
@@ -59,9 +68,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             log.info("phone format wrong : {}",phone);
             return Result.fail("手机号格式错误");
         }
-        Object trueCode = session.getAttribute("code");
+        String trueCode = stringRedisTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
         //验证码是否一致
-        if(trueCode==null||!trueCode.toString().equals(loginForm.getCode())){
+        if(trueCode==null||!trueCode.equals(loginForm.getCode())){
             log.info("access code wrong : {},right code is : {}",loginForm.getCode(),trueCode);
             return Result.fail("验证码错误");
         }
@@ -73,9 +82,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         UserDTO userDTO = new UserDTO();
         BeanUtils.copyProperties(user,userDTO);
-        session.setAttribute("loginUser",userDTO );
+        HashMap<String, String> map = new HashMap<>();
+        String token = UUID.randomUUID().toString();
+        map.put("id",userDTO.getId().toString());
+        map.put("icon",userDTO.getIcon());
+        map.put("nickName",userDTO.getNickName());
+        stringRedisTemplate.opsForHash().putAll(LOGIN_USER_KEY+ token,map);
+        stringRedisTemplate.expire(LOGIN_USER_KEY+token,LOGIN_USER_TTL, TimeUnit.SECONDS);
 
-        return Result.ok();
+        return Result.ok(token);
     }
 
     private User createUserWithPhone(String phone) {
