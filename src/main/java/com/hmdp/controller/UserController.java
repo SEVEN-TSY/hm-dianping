@@ -57,9 +57,9 @@ public class UserController {
      * @return 无
      */
     @PostMapping("/logout")
-    public Result logout(){
-        UserHolder.removeUser();
-        return Result.ok();
+    public Result logout(@RequestHeader("authorization") String token){
+        return userService.logout(token);
+
     }
 
     @GetMapping("/me")
