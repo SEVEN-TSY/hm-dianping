@@ -27,7 +27,7 @@ import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TYPES_TTL;
  *  服务实现类
  * </p>
  *
- * @author 虎哥
+ * @author Ethan
  * @since 2021-12-22
  */
 @Slf4j
@@ -56,7 +56,7 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
         queryList.forEach(e->{
             stringRedisTemplate.opsForZSet().add(key, JSON.toJSONString(e),e.getSort());
         });
-        stringRedisTemplate.opsForZSet().getOperations().expire(key,CACHE_SHOP_TYPES_TTL, TimeUnit.MINUTES);
+        stringRedisTemplate.expire(key,CACHE_SHOP_TYPES_TTL, TimeUnit.MINUTES);
 
         return Result.ok(queryList);
 
