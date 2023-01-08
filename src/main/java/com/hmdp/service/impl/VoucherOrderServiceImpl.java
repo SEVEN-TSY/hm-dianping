@@ -8,16 +8,18 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIDGenerator;
+import com.hmdp.utils.RedisSimpleLock;
 import com.hmdp.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
-import org.springframework.aop.framework.AopProxy;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
-import java.lang.ref.ReferenceQueue;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
+import static com.hmdp.utils.RedisConstants.LOCK_VOUCHER_SECKILL_TTL;
 import static com.hmdp.utils.RedisConstants.ORDER_KEY_PREFIX;
 
 /**
@@ -37,6 +39,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RedisIDGenerator idGenerator;
 
+    @Resource
+    private RedisSimpleLock simpleLock;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
 
     @Override
     public Result seckillVoucher(Long voucherId) {
@@ -55,14 +63,22 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail("优惠券抢完了！");
         }
         Long userId = UserHolder.getUser().getId();
-        IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
-        synchronized (userId.toString().intern()){
+        //分布式锁key name = prefix+userId+voucherId
+        String lockKey= ORDER_KEY_PREFIX + userId + ":" + voucherId;
+        boolean tryLock = simpleLock.tryLock(lockKey, LOCK_VOUCHER_SECKILL_TTL);
+        if(!tryLock){
+            return Result.fail("抢购排队中，请勿频繁点击！");
+        }
+        try {
+            IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.queryVoucherByUserId(voucherId);
+        } finally {
+            simpleLock.unlock(lockKey);
         }
     }
 
     @Transactional
-    public Result queryVoucherByUserId(Long voucherId){
+    public Result<Long> queryVoucherByUserId(Long voucherId){
         Long userId = UserHolder.getUser().getId();
         Long id = idGenerator.nextId(ORDER_KEY_PREFIX);
         //一人一单
