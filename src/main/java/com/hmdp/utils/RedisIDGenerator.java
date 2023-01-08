@@ -31,7 +31,7 @@ public class RedisIDGenerator {
         //时间戳+redis自增
         long timeStamp = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
         String format = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy:MM:dd"));
-        long increment = stringRedisTemplate.opsForValue().increment("inc:" + keyPrefix + ":" + format);
+        long increment = stringRedisTemplate.opsForValue().increment("inc:" + keyPrefix  + format);
         return timeStamp << COUNT_BITS | increment;
     }
 }

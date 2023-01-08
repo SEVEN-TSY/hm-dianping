@@ -3,7 +3,6 @@ package com.hmdp.utils;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.TypeReference;
-import com.hmdp.entity.Shop;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -15,8 +14,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import static com.hmdp.utils.RedisConstants.*;
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TTL;
 
 /**
  * @Description TODO
@@ -175,10 +172,7 @@ public class RedisUtils {
     public static boolean tryLock(String key){
         Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", LOCK_TTL, TimeUnit.SECONDS);
 
-        if (flag!=null&& flag) {
-            return true;
-        }
-        return false;
+        return Boolean.TRUE.equals(flag);
     }
 
     public static void unLock(String key){
