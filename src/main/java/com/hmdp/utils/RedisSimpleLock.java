@@ -1,8 +1,12 @@
 package com.hmdp.utils;
 
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -16,6 +20,12 @@ public class RedisSimpleLock implements ILock{
 
     private StringRedisTemplate stringRedisTemplate;
     private static final String VAL_PREFIX = UUID.randomUUID()+":";
+    private static final DefaultRedisScript<Long> UNLOCK_SCRIPT;
+    static {
+        UNLOCK_SCRIPT=new DefaultRedisScript<>();
+        UNLOCK_SCRIPT.setLocation(new ClassPathResource("unlock.lua"));
+        UNLOCK_SCRIPT.setResultType(Long.class);
+    }
 
     public RedisSimpleLock(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
@@ -30,9 +40,6 @@ public class RedisSimpleLock implements ILock{
     @Override
     public void unlock(String key) {
         String value = VAL_PREFIX + Thread.currentThread().getId();
-        String checkValue = stringRedisTemplate.opsForValue().get(key);
-        if (value.equals(checkValue)) {
-            stringRedisTemplate.delete(key);
-        }
+        stringRedisTemplate.execute(UNLOCK_SCRIPT, Collections.singletonList(key),value);
     }
 }
